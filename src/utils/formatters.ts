@@ -224,9 +224,22 @@ export const LOST_REASON_LABELS: Record<string, string> = {
 export const CLIENT_SEGMENT_LABELS: Record<string, string> = {
   comercio: 'Comércio / Varejo',
   servicos: 'Prestação de Serviços',
-  industria: 'Indústria / Produção',
+  industria: 'Indústria / Manufatura',
   autonomo: 'Profissional Autônomo / MEI',
   consumidor_final: 'Pessoa Física / Consumidor Final',
   outros: 'Outro segmento',
 };
+
+export const COMPANY_SIZE_LABELS: Record<string, string> = {
+  somente_eu: 'Somente eu (1 pessoa)',
+  '2_10': '2 a 10 funcionários',
+  '11_50': '11 a 50 funcionários',
+  mais_50: 'Mais de 50 funcionários',
+};
+
+export function isValidEmail(email: string): boolean {
+  if (!email || !email.trim()) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
 

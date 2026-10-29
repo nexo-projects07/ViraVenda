@@ -1,12 +1,26 @@
 import React, { useState, useRef } from 'react';
-import { Client, Opportunity, FollowUpTask, ActivityLog, UserSettings } from '../types';
+import {
+  Client,
+  Opportunity,
+  FollowUpTask,
+  ActivityLog,
+  UserSettings,
+  AppMode,
+  CompanySize,
+  ClientSegment,
+} from '../types';
 import {
   exportBackupJSON,
   validateAndPreviewJSON,
   exportClientsCSV,
   exportOpportunitiesCSV,
 } from '../utils/storage';
-import { formatPhoneBR, CLIENT_SEGMENT_LABELS } from '../utils/formatters';
+import {
+  formatPhoneBR,
+  isValidEmail,
+  CLIENT_SEGMENT_LABELS,
+  COMPANY_SIZE_LABELS,
+} from '../utils/formatters';
 import {
   Settings2,
   HardDrive,
@@ -20,10 +34,14 @@ import {
   User,
   Building,
   Phone,
+  Mail,
   FileSpreadsheet,
   AlertTriangle,
   X,
   Briefcase,
+  Users2,
+  ArrowRightLeft,
+  Building2,
 } from 'lucide-react';
 
 interface SettingsBackupViewProps {
@@ -37,6 +55,7 @@ interface SettingsBackupViewProps {
   onClearDemoData: () => void;
   onReloadDemoData: () => void;
   onResetAllData: () => void;
+  onSwitchMode?: (targetMode: AppMode) => void;
   onImportData: (data: {
     clients: Client[];
     opportunities: Opportunity[];
@@ -58,14 +77,19 @@ export const SettingsBackupView: React.FC<SettingsBackupViewProps> = ({
   onClearDemoData,
   onReloadDemoData,
   onResetAllData,
+  onSwitchMode,
   onImportData,
   onShowToast,
 }) => {
   const [userName, setUserName] = useState(settings.userName || '');
+  const [userRole, setUserRole] = useState(settings.userRole || '');
   const [businessName, setBusinessName] = useState(settings.businessName || '');
   const [businessPhone, setBusinessPhone] = useState(settings.businessPhone || '');
-  const [businessSegment, setBusinessSegment] = useState(settings.businessSegment || '');
+  const [businessEmail, setBusinessEmail] = useState(settings.businessEmail || '');
+  const [businessSegment, setBusinessSegment] = useState<string>(settings.businessSegment || 'servicos');
+  const [companySize, setCompanySize] = useState<CompanySize>(settings.companySize || 'somente_eu');
   const [savedSettingsSuccess, setSavedSettingsSuccess] = useState(false);
+  const [emailError, setEmailError] = useState('');
 
   // Modal de pré-visualização de importação
   const [importPreview, setImportPreview] = useState<{
@@ -90,14 +114,26 @@ export const SettingsBackupView: React.FC<SettingsBackupViewProps> = ({
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (businessEmail.trim() && !isValidEmail(businessEmail.trim())) {
+      setEmailError('Formato de e-mail inválido. Exemplo: contato@suaempresa.com.br');
+      return;
+    }
+    setEmailError('');
+
     onUpdateSettings({
+      ...settings,
       userName: userName.trim(),
+      userRole: userRole.trim() || undefined,
       businessName: businessName.trim(),
       businessPhone: businessPhone.trim(),
-      businessSegment: businessSegment.trim() || undefined,
+      businessEmail: businessEmail.trim() || undefined,
+      businessSegment,
+      companySize,
     });
+
     setSavedSettingsSuccess(true);
-    onShowToast('Dados comerciais atualizados com sucesso!', 'success');
+    onShowToast('Dados comerciais da empresa atualizados com sucesso!', 'success');
     setTimeout(() => setSavedSettingsSuccess(false), 2500);
   };
 
@@ -155,7 +191,65 @@ export const SettingsBackupView: React.FC<SettingsBackupViewProps> = ({
 
   return (
     <div className="space-y-6 max-w-4xl">
-      {/* Dados Comerciais */}
+      {/* Ambiente Ativo & Alternância */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
+        <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-emerald-100 text-emerald-800 rounded-lg">
+              <ArrowRightLeft className="w-4 h-4" />
+            </div>
+            <h2 className="text-base font-bold text-slate-900">
+              Ambiente de Trabalho
+            </h2>
+          </div>
+          <span className="text-xs text-slate-500">
+            Separação completa entre sua empresa e demonstração
+          </span>
+        </div>
+
+        <div className="mt-4 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-4 rounded-xl border border-slate-200 bg-slate-50/70">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                Ambiente Atual:
+              </span>
+              {isDemo ? (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                  <Sparkles className="w-3 h-3 text-amber-600" />
+                  <span>Modo Demonstração (Dados Fictícios)</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  <Building2 className="w-3 h-3 text-emerald-600" />
+                  <span>Ambiente Próprio ({settings.businessName || 'Minha Empresa'})</span>
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-600">
+              {isDemo
+                ? 'Você está explorando dados de exemplo. Suas alterações aqui não afetam sua empresa real.'
+                : 'Você está no ambiente real da sua empresa. Todos os clientes e orçamentos cadastrados são seus.'}
+            </p>
+          </div>
+
+          {onSwitchMode && (
+            <button
+              type="button"
+              onClick={() => onSwitchMode(isDemo ? 'own' : 'demo')}
+              className={`shrink-0 inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-bold shadow-xs transition cursor-pointer ${
+                isDemo
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                  : 'bg-white hover:bg-slate-100 text-slate-800 border border-slate-300'
+              }`}
+            >
+              <ArrowRightLeft className="w-4 h-4" />
+              <span>{isDemo ? 'Ir para Meu Ambiente' : 'Alternar para Demonstração'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Dados Comerciais da Empresa */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
         <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -167,7 +261,7 @@ export const SettingsBackupView: React.FC<SettingsBackupViewProps> = ({
             </h2>
           </div>
           <span className="text-xs text-slate-400">
-            Usados para assinar mensagens no WhatsApp
+            Personaliza mensagens no WhatsApp e cabeçalhos
           </span>
         </div>
 
@@ -177,62 +271,133 @@ export const SettingsBackupView: React.FC<SettingsBackupViewProps> = ({
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5 text-slate-400" />
-                <span>Seu Nome / Como você se apresenta</span>
+                <span>Nome completo do responsável <span className="text-rose-500">*</span></span>
               </label>
               <input
                 type="text"
                 value={userName}
                 onChange={(e) => setUserName(e.target.value)}
-                placeholder="Ex: Lucas Oliveira"
+                placeholder="Ex: Mariana Silva"
+                required
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 text-sm text-slate-800 focus:outline-none transition"
               />
             </div>
 
-            {/* Nome da Empresa */}
+            {/* Cargo */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
-                <Building className="w-3.5 h-3.5 text-slate-400" />
-                <span>Nome da Sua Empresa / Loja</span>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Briefcase className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Cargo / Função</span>
+                </span>
+                <span className="text-[11px] text-slate-400">Opcional</span>
               </label>
               <input
                 type="text"
-                value={businessName}
-                onChange={(e) => setBusinessName(e.target.value)}
-                placeholder="Ex: AutoFix Mecânica"
+                value={userRole}
+                onChange={(e) => setUserRole(e.target.value)}
+                placeholder="Ex: Proprietária, Diretor Comercial"
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 text-sm text-slate-800 focus:outline-none transition"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Nome da Empresa */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                <Building className="w-3.5 h-3.5 text-slate-400" />
+                <span>Nome da Sua Empresa / Negócio <span className="text-rose-500">*</span></span>
+              </label>
+              <input
+                type="text"
+                value={businessName}
+                onChange={(e) => setBusinessName(e.target.value)}
+                placeholder="Ex: Silva Móveis Planejados"
+                required
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 text-sm text-slate-800 focus:outline-none transition"
+              />
+            </div>
+
             {/* Telefone */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
                 <Phone className="w-3.5 h-3.5 text-slate-400" />
-                <span>Seu Telefone / WhatsApp Comercial</span>
+                <span>Telefone com DDD / WhatsApp <span className="text-rose-500">*</span></span>
               </label>
               <input
                 type="tel"
                 value={businessPhone}
                 onChange={(e) => setBusinessPhone(formatPhoneBR(e.target.value))}
                 placeholder="(11) 98765-4321"
+                required
                 className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 text-sm text-slate-800 focus:outline-none transition"
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* E-mail */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                <span className="flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-slate-400" />
+                  <span>E-mail profissional</span>
+                </span>
+                <span className="text-[11px] text-slate-400">Opcional</span>
+              </label>
+              <input
+                type="email"
+                value={businessEmail}
+                onChange={(e) => {
+                  setBusinessEmail(e.target.value);
+                  setEmailError('');
+                }}
+                placeholder="contato@empresa.com.br"
+                className={`w-full px-3.5 py-2.5 rounded-xl border text-sm text-slate-800 focus:outline-none transition ${
+                  emailError ? 'border-rose-400 bg-rose-50/20' : 'border-slate-200 focus:border-emerald-500'
+                }`}
+              />
+              {emailError && (
+                <span className="text-[11px] text-rose-600 mt-1 block">{emailError}</span>
+              )}
             </div>
 
             {/* Segmento */}
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
                 <Briefcase className="w-3.5 h-3.5 text-slate-400" />
-                <span>Segmento Principal do Negócio</span>
+                <span>Segmento de Atuação</span>
               </label>
-              <input
-                type="text"
+              <select
                 value={businessSegment}
                 onChange={(e) => setBusinessSegment(e.target.value)}
-                placeholder="Ex: Marcenaria & Móveis Planejados"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 text-sm text-slate-800 focus:outline-none transition"
-              />
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 text-sm text-slate-800 bg-white focus:outline-none transition cursor-pointer"
+              >
+                <option value="servicos">Prestação de Serviços</option>
+                <option value="comercio">Comércio / Varejo</option>
+                <option value="industria">Indústria / Fabricação</option>
+                <option value="autonomo">Profissional Autônomo</option>
+                <option value="outro">Outro segmento</option>
+              </select>
+            </div>
+
+            {/* Tamanho da Empresa */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1 flex items-center gap-1.5">
+                <Users2 className="w-3.5 h-3.5 text-slate-400" />
+                <span>Porte da Empresa</span>
+              </label>
+              <select
+                value={companySize}
+                onChange={(e) => setCompanySize(e.target.value as CompanySize)}
+                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 text-sm text-slate-800 bg-white focus:outline-none transition cursor-pointer"
+              >
+                <option value="somente_eu">Somente eu (Autônomo / MEI)</option>
+                <option value="2_10">2 a 10 funcionários (Microempresa)</option>
+                <option value="11_50">11 a 50 funcionários (Pequena empresa)</option>
+                <option value="mais_50">Mais de 50 funcionários</option>
+              </select>
             </div>
           </div>
 
@@ -253,7 +418,7 @@ export const SettingsBackupView: React.FC<SettingsBackupViewProps> = ({
         </form>
       </div>
 
-      {/* Privacidade & Armazenamento Local */}
+      {/* Armazenamento Local & Privacidade */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-3">
         <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
           <div className="p-1.5 bg-slate-100 text-slate-700 rounded-lg">
@@ -389,7 +554,7 @@ export const SettingsBackupView: React.FC<SettingsBackupViewProps> = ({
         </div>
       </div>
 
-      {/* Dados de Demonstração e Zerar Dados */}
+      {/* Demonstração & Zerar Dados */}
       <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
         <h2 className="text-base font-bold text-slate-900 pb-2 border-b border-slate-100">
           Gerenciamento de Dados & Demonstração
@@ -397,46 +562,46 @@ export const SettingsBackupView: React.FC<SettingsBackupViewProps> = ({
 
         <div className="space-y-3">
           {/* Se estiver no modo demo */}
-          {isDemo && (
+          {isDemo ? (
             <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between flex-wrap gap-2 text-xs">
               <div className="flex items-center gap-2 text-amber-900">
                 <Sparkles className="w-4 h-4 text-amber-700 shrink-0" />
                 <span>Você está utilizando os dados demonstrativos do sistema.</span>
               </div>
               <button
-                onClick={onClearDemoData}
+                onClick={onReloadDemoData}
                 className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold transition cursor-pointer"
               >
-                Limpar Demonstração e Começar Limpo
+                Restaurar Exemplos Padrão
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
+              <div>
+                <span className="text-xs font-semibold text-slate-800 block">
+                  Restaurar Exemplos da Demonstração
+                </span>
+                <span className="text-[11px] text-slate-500">
+                  Restaura o conjunto fictício da demonstração (não apaga os dados da sua empresa).
+                </span>
+              </div>
+              <button
+                onClick={onReloadDemoData}
+                className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                <span>Resetar Demonstração</span>
               </button>
             </div>
           )}
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
-            <div>
-              <span className="text-xs font-semibold text-slate-800 block">
-                Recarregar Dados de Exemplo
-              </span>
-              <span className="text-[11px] text-slate-500">
-                Substitui a base atual por exemplos brasileiros de clientes, propostas e tarefas.
-              </span>
-            </div>
-            <button
-              onClick={onReloadDemoData}
-              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold transition cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-              <span>Recarregar Exemplos</span>
-            </button>
-          </div>
-
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-100">
             <div>
               <span className="text-xs font-semibold text-rose-700 block">
-                Zerar Todos os Dados
+                Zerar Dados da Base Ativa
               </span>
               <span className="text-[11px] text-slate-500">
-                Remove permanentemente todos os clientes, orçamentos e tarefas salvos neste navegador.
+                Remove permanentemente clientes, orçamentos e tarefas salvos neste navegador para a base ativa.
               </span>
             </div>
             <button

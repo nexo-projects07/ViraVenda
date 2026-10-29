@@ -102,11 +102,25 @@ export interface ActivityLog {
   meta?: Record<string, any>;
 }
 
+export type CompanySize =
+  | 'somente_eu'
+  | '2_10'
+  | '11_50'
+  | 'mais_50'
+  | string;
+
+export type AppMode = 'own' | 'demo';
+
 export interface UserSettings {
   userName: string;
   businessName: string;
   businessPhone: string;
+  businessEmail?: string;
   businessSegment?: string;
+  companySize?: CompanySize;
+  userRole?: string;
+  onboardingCompleted?: boolean;
+  appMode?: AppMode;
 }
 
 export type MessageTone = 'amigavel' | 'direto' | 'formal';

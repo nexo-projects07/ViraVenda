@@ -15,18 +15,23 @@ import {
   UserSettings,
   ActiveTab,
   ToastMessage,
+  AppMode,
 } from './types';
 import {
   loadStoredData,
   saveStoredData,
-  clearAllData,
-  resetToDemoData,
-  DEFAULT_USER_SETTINGS,
+  loadDatasetForMode,
+  completeOnboarding,
+  setStoredAppMode,
+  resetDemoData,
+  clearOwnData,
+  DEFAULT_OWN_SETTINGS,
 } from './utils/storage';
 import { getFollowUpStatus, formatBRL } from './utils/formatters';
 
 import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
+import { OnboardingView } from './components/OnboardingView';
 import { ToastContainer } from './components/Toast';
 import { ConfirmModal } from './components/ConfirmModal';
 import { ClientModal } from './components/ClientModal';
@@ -43,14 +48,18 @@ import { ReportsView } from './components/ReportsView';
 import { SettingsBackupView } from './components/SettingsBackupView';
 
 export default function App() {
-  // Estado principal
+  // Estado de Onboarding & Ambiente
+  const [onboardingCompleted, setOnboardingCompleted] = useState<boolean>(false);
+  const [appMode, setAppMode] = useState<AppMode>('own');
+  const [showOnboardingModal, setShowOnboardingModal] = useState<boolean>(false);
+  const [isLoaded, setIsLoaded] = useState<boolean>(false);
+
+  // Estado principal de dados
   const [clients, setClients] = useState<Client[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [tasks, setTasks] = useState<FollowUpTask[]>([]);
   const [activities, setActivities] = useState<ActivityLog[]>([]);
-  const [settings, setSettings] = useState<UserSettings>(DEFAULT_USER_SETTINGS);
-  const [isDemo, setIsDemo] = useState<boolean>(false);
-  const [isLoaded, setIsLoaded] = useState<boolean>(false);
+  const [settings, setSettings] = useState<UserSettings>(DEFAULT_OWN_SETTINGS);
 
   // Navegação
   const [activeTab, setActiveTab] = useState<ActiveTab>('dashboard');
@@ -144,16 +153,17 @@ export default function App() {
     setTasks(data.tasks);
     setActivities(data.activities);
     setSettings(data.settings);
-    setIsDemo(data.isDemo);
+    setAppMode(data.appMode);
+    setOnboardingCompleted(data.onboardingCompleted);
     setIsLoaded(true);
   }, []);
 
   // Salvar no localStorage sempre que os dados mudarem após a carga inicial
   useEffect(() => {
     if (isLoaded) {
-      saveStoredData(clients, opportunities, tasks, activities, settings, isDemo);
+      saveStoredData(clients, opportunities, tasks, activities, settings, appMode);
     }
-  }, [clients, opportunities, tasks, activities, settings, isDemo, isLoaded]);
+  }, [clients, opportunities, tasks, activities, settings, appMode, isLoaded]);
 
   // Contagem de follow-ups atrasados e para hoje (soma tarefas pendentes e opps)
   let overdueCount = 0;
@@ -165,6 +175,68 @@ export default function App() {
       if (st.isToday) todayCount++;
     }
   });
+
+  // --- Fluxo de Onboarding e Alternância de Modo ---
+  const handleCompleteCompanySetup = (newCompanySettings: UserSettings) => {
+    const res = completeOnboarding(newCompanySettings);
+    setSettings(res.settings);
+    setOnboardingCompleted(true);
+    setAppMode('own');
+    setShowOnboardingModal(false);
+
+    // Carrega a base limpa da própria empresa
+    const ownData = loadDatasetForMode('own');
+    setClients(ownData.clients);
+    setOpportunities(ownData.opportunities);
+    setTasks(ownData.tasks);
+    setActivities(ownData.activities);
+
+    showToast(`Ambiente de ${newCompanySettings.businessName} pronto para uso!`, 'success');
+  };
+
+  const handleExploreDemo = () => {
+    setAppMode('demo');
+    setStoredAppMode('demo');
+    setShowOnboardingModal(false);
+
+    const demoData = loadDatasetForMode('demo');
+    setClients(demoData.clients);
+    setOpportunities(demoData.opportunities);
+    setTasks(demoData.tasks);
+    setActivities(demoData.activities);
+    setSettings(demoData.settings);
+
+    showToast('Você entrou no Modo Demonstração com dados fictícios de exemplo.', 'info');
+  };
+
+  const handleSwitchMode = (targetMode: AppMode) => {
+    if (targetMode === appMode) return;
+
+    // Salva o dataset do modo atual antes de trocar
+    saveStoredData(clients, opportunities, tasks, activities, settings, appMode);
+
+    // Se o usuário quer ir para o ambiente próprio mas ainda não configurou a empresa
+    if (targetMode === 'own' && !onboardingCompleted) {
+      setShowOnboardingModal(true);
+      return;
+    }
+
+    // Carrega o dataset do modo de destino
+    const targetData = loadDatasetForMode(targetMode);
+    setClients(targetData.clients);
+    setOpportunities(targetData.opportunities);
+    setTasks(targetData.tasks);
+    setActivities(targetData.activities);
+    setSettings(targetData.settings);
+    setAppMode(targetMode);
+    setStoredAppMode(targetMode);
+
+    if (targetMode === 'own') {
+      showToast(`Alternado para o ambiente da empresa: ${targetData.settings.businessName || 'Minha Empresa'}`, 'success');
+    } else {
+      showToast('Alternado para o Modo Demonstração (dados fictícios).', 'info');
+    }
+  };
 
   // --- Ações de Clientes ---
   const handleOpenNewClient = () => {
@@ -570,67 +642,53 @@ export default function App() {
     setActiveTab('mensagens');
   };
 
-  // --- Gerenciamento de Dados (Demonstração e Backup) ---
-  const handleClearDemoData = () => {
-    setConfirmModal({
-      isOpen: true,
-      title: 'Limpar Dados de Exemplo',
-      message:
-        'Deseja remover todos os clientes e propostas de exemplo para começar a cadastrar os clientes reais do seu negócio?',
-      confirmLabel: 'Limpar e começar do zero',
-      isDestructive: false,
-      onConfirm: () => {
-        clearAllData();
-        setClients([]);
-        setOpportunities([]);
-        setTasks([]);
-        setActivities([]);
-        setIsDemo(false);
-        setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-        showToast('Ambiente limpo! Comece cadastrando seus primeiros clientes.', 'success');
-      },
-    });
-  };
-
+  // --- Gerenciamento de Demonstração e Limpeza de Dados ---
   const handleReloadDemoData = () => {
     setConfirmModal({
       isOpen: true,
-      title: 'Recarregar Dados de Exemplo',
+      title: 'Restaurar Dados da Demonstração',
       message:
-        'Isto substituirá as informações atuais por clientes, orçamentos e tarefas simulados. Deseja continuar?',
-      confirmLabel: 'Recarregar Exemplos',
+        'Isto restaurará o conjunto inicial fictício da demonstração. Seus dados da empresa própria permanecerão 100% preservados e intocados.',
+      confirmLabel: 'Restaurar Demonstração',
       isDestructive: false,
       onConfirm: () => {
-        const demo = resetToDemoData();
-        setClients(demo.clients);
-        setOpportunities(demo.opportunities);
-        setTasks(demo.tasks);
-        setActivities(demo.activities);
-        setSettings(demo.settings);
-        setIsDemo(true);
+        const demo = resetDemoData();
+        if (appMode === 'demo') {
+          setClients(demo.clients);
+          setOpportunities(demo.opportunities);
+          setTasks(demo.tasks);
+          setActivities(demo.activities);
+          setSettings(demo.settings);
+        }
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-        showToast('Dados de demonstração restaurados.', 'info');
+        showToast('Dados de demonstração restaurados com sucesso.', 'info');
       },
     });
   };
 
-  const handleResetAllData = () => {
+  const handleResetActiveData = () => {
+    const isOwn = appMode === 'own';
     setConfirmModal({
       isOpen: true,
-      title: 'Zerar Todos os Dados',
-      message:
-        'ATENÇÃO: Todos os clientes, orçamentos, tarefas e relatórios serão apagados permanentemente deste navegador. Certifique-se de ter feito um backup se desejar salvar alguma informação.',
-      confirmLabel: 'Sim, apagar tudo',
+      title: isOwn ? 'Limpar Dados da Empresa' : 'Limpar Dados da Demonstração',
+      message: isOwn
+        ? `ATENÇÃO: Todos os clientes, orçamentos e tarefas da sua empresa (${settings.businessName || 'Minha Empresa'}) serão apagados permanentemente deste navegador. Certifique-se de exportar um backup antes se desejar guardar uma cópia.`
+        : 'Deseja limpar todos os registros do modo de demonstração?',
+      confirmLabel: 'Sim, limpar base',
       isDestructive: true,
       onConfirm: () => {
-        clearAllData();
+        if (isOwn) {
+          clearOwnData();
+        }
         setClients([]);
         setOpportunities([]);
         setTasks([]);
         setActivities([]);
-        setIsDemo(false);
         setConfirmModal((prev) => ({ ...prev, isOpen: false }));
-        showToast('Todos os dados foram apagados com sucesso.', 'info');
+        showToast(
+          isOwn ? 'Dados da empresa limpos. Você pode cadastrar novos clientes.' : 'Base de demonstração limpa.',
+          'info'
+        );
       },
     });
   };
@@ -647,10 +705,26 @@ export default function App() {
     setTasks(data.tasks);
     setActivities(data.activities);
     setSettings(data.settings);
-    setIsDemo(false);
-    saveStoredData(data.clients, data.opportunities, data.tasks, data.activities, data.settings, false);
-    showToast('Backup restaurado e sincronizado com sucesso!', 'success');
+    setAppMode('own');
+    setOnboardingCompleted(true);
+    saveStoredData(data.clients, data.opportunities, data.tasks, data.activities, data.settings, 'own');
+    showToast('Backup restaurado e sincronizado com sucesso na sua base própria!', 'success');
   };
+
+  // Se ainda estiver carregando do localStorage, renderiza nada ou spinner sutil
+  if (!isLoaded) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center" />;
+  }
+
+  // Se não concluiu onboarding e não está no modo demo, exibe a tela de boas-vindas
+  if (!onboardingCompleted && appMode !== 'demo') {
+    return (
+      <OnboardingView
+        onCompleteCompanySetup={handleCompleteCompanySetup}
+        onExploreDemo={handleExploreDemo}
+      />
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
@@ -660,9 +734,12 @@ export default function App() {
         onTabChange={setActiveTab}
         overdueCount={overdueCount}
         todayCount={todayCount}
-        isDemo={isDemo}
+        isDemo={appMode === 'demo'}
+        settings={settings}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}
+        onSwitchMode={handleSwitchMode}
+        onOpenOnboarding={() => setShowOnboardingModal(true)}
       />
 
       {/* Conteúdo Principal com compensação da sidebar (w-64) no desktop */}
@@ -673,8 +750,11 @@ export default function App() {
           onOpenMobileMenu={() => setMobileMenuOpen(true)}
           onNewClient={handleOpenNewClient}
           onNewOpportunity={() => handleOpenNewOpportunity()}
-          isDemo={isDemo}
-          onClearDemo={handleClearDemoData}
+          isDemo={appMode === 'demo'}
+          settings={settings}
+          onSwitchMode={handleSwitchMode}
+          onResetDemo={handleReloadDemoData}
+          onOpenOnboarding={() => setShowOnboardingModal(true)}
         />
 
         {/* View Ativa */}
@@ -697,6 +777,9 @@ export default function App() {
                   showToast('Retorno marcado como realizado!', 'success');
                 }
               }}
+              isDemo={appMode === 'demo'}
+              settings={settings}
+              onSwitchMode={handleSwitchMode}
             />
           )}
 
@@ -775,17 +858,30 @@ export default function App() {
               tasks={tasks}
               activities={activities}
               settings={settings}
-              isDemo={isDemo}
+              isDemo={appMode === 'demo'}
               onUpdateSettings={setSettings}
-              onClearDemoData={handleClearDemoData}
+              onClearDemoData={handleResetActiveData}
               onReloadDemoData={handleReloadDemoData}
-              onResetAllData={handleResetAllData}
+              onResetAllData={handleResetActiveData}
+              onSwitchMode={handleSwitchMode}
               onImportData={handleImportBackup}
               onShowToast={showToast}
             />
           )}
         </main>
       </div>
+
+      {/* Modal de Configuração de Empresa Aberto a partir da Demo */}
+      {showOnboardingModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl relative">
+            <OnboardingView
+              onCompleteCompanySetup={handleCompleteCompanySetup}
+              onExploreDemo={() => setShowOnboardingModal(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Modal de Cliente */}
       <ClientModal

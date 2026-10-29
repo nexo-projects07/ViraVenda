@@ -4,31 +4,59 @@ import {
   FollowUpTask,
   ActivityLog,
   UserSettings,
+  AppMode,
 } from '../types';
 import { getTodayISODate, addDaysToDate } from './formatters';
 
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   VERSION: 'viravenda_schema_version',
-  CLIENTS: 'viravenda_clients_v2',
-  OPPORTUNITIES: 'viravenda_opportunities_v2',
-  TASKS: 'viravenda_tasks_v2',
-  ACTIVITIES: 'viravenda_activities_v2',
-  SETTINGS: 'viravenda_settings_v2',
-  IS_DEMO: 'viravenda_is_demo_v2',
-  // Chaves antigas para migração transparente
+  ONBOARDING_COMPLETED: 'viravenda_onboarding_completed_v2',
+  APP_MODE: 'viravenda_app_mode_v2',
+  // Ambiente Próprio da Empresa
+  OWN_SETTINGS: 'viravenda_settings_v2',
+  OWN_CLIENTS: 'viravenda_clients_v2',
+  OWN_OPPORTUNITIES: 'viravenda_opportunities_v2',
+  OWN_TASKS: 'viravenda_tasks_v2',
+  OWN_ACTIVITIES: 'viravenda_activities_v2',
+  // Ambiente Isolado de Demonstração
+  DEMO_SETTINGS: 'viravenda_demo_settings_v2',
+  DEMO_CLIENTS: 'viravenda_demo_clients_v2',
+  DEMO_OPPORTUNITIES: 'viravenda_demo_opportunities_v2',
+  DEMO_TASKS: 'viravenda_demo_tasks_v2',
+  DEMO_ACTIVITIES: 'viravenda_demo_activities_v2',
+  // Legados para compatibilidade
+  LEGACY_IS_DEMO: 'viravenda_is_demo_v2',
   CLIENTS_V1: 'viravenda_clients_v1',
   OPPORTUNITIES_V1: 'viravenda_opportunities_v1',
   SETTINGS_V1: 'viravenda_settings_v1',
   IS_DEMO_V1: 'viravenda_is_demo_v1',
 };
 
-export const DEFAULT_USER_SETTINGS: UserSettings = {
-  userName: 'Mariana',
-  businessName: 'ViraVenda Soluções',
+export const DEFAULT_DEMO_SETTINGS: UserSettings = {
+  userName: 'Mariana Silva',
+  businessName: 'ViraVenda Soluções Comerciais',
   businessPhone: '(11) 98765-4321',
-  businessSegment: 'Serviços & Comércio',
+  businessEmail: 'mariana@viravenda.com.br',
+  businessSegment: 'servicos',
+  companySize: '2_10',
+  userRole: 'Proprietária & Gestora Comercial',
+  onboardingCompleted: true,
+  appMode: 'demo',
 };
 
+export const DEFAULT_OWN_SETTINGS: UserSettings = {
+  userName: '',
+  businessName: '',
+  businessPhone: '',
+  businessEmail: '',
+  businessSegment: 'servicos',
+  companySize: 'somente_eu',
+  userRole: '',
+  onboardingCompleted: false,
+  appMode: 'own',
+};
+
+// Dados demonstrativos realistas brasileiros
 export function getInitialDemoData(): {
   clients: Client[];
   opportunities: Opportunity[];
@@ -42,7 +70,6 @@ export function getInitialDemoData(): {
   const past1Day = addDaysToDate(-1);
   const future1Day = addDaysToDate(1);
   const future3Days = addDaysToDate(3);
-  const future7Days = addDaysToDate(7);
 
   const clients: Client[] = [
     {
@@ -284,7 +311,7 @@ export function getInitialDemoData(): {
     {
       id: 'act-1',
       type: 'opportunity_won',
-      title: 'Venda Fechada!',
+      title: 'Venda Fechada! 🎉',
       description: 'Juliana Pires fechou "Consultoria de Ambientação e Iluminação" no valor de R$ 1.800,00',
       timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
       clientId: 'cli-5',
@@ -333,10 +360,96 @@ export function getInitialDemoData(): {
     opportunities,
     tasks,
     activities,
-    settings: DEFAULT_USER_SETTINGS,
+    settings: DEFAULT_DEMO_SETTINGS,
   };
 }
 
+/**
+ * Lê os dados de um ambiente específico ('own' ou 'demo')
+ */
+export function loadDatasetForMode(mode: AppMode): {
+  clients: Client[];
+  opportunities: Opportunity[];
+  tasks: FollowUpTask[];
+  activities: ActivityLog[];
+  settings: UserSettings;
+} {
+  const isDemoMode = mode === 'demo';
+  const clientsKey = isDemoMode ? STORAGE_KEYS.DEMO_CLIENTS : STORAGE_KEYS.OWN_CLIENTS;
+  const oppsKey = isDemoMode ? STORAGE_KEYS.DEMO_OPPORTUNITIES : STORAGE_KEYS.OWN_OPPORTUNITIES;
+  const tasksKey = isDemoMode ? STORAGE_KEYS.DEMO_TASKS : STORAGE_KEYS.OWN_TASKS;
+  const actsKey = isDemoMode ? STORAGE_KEYS.DEMO_ACTIVITIES : STORAGE_KEYS.OWN_ACTIVITIES;
+  const settingsKey = isDemoMode ? STORAGE_KEYS.DEMO_SETTINGS : STORAGE_KEYS.OWN_SETTINGS;
+
+  const rawClients = localStorage.getItem(clientsKey);
+  const rawOpps = localStorage.getItem(oppsKey);
+  const rawTasks = localStorage.getItem(tasksKey);
+  const rawActivities = localStorage.getItem(actsKey);
+  const rawSettings = localStorage.getItem(settingsKey);
+
+  if (isDemoMode) {
+    // Se for modo demo e ainda não tiver sido inicializado, inicializa com demo padrão
+    if (rawClients === null && rawOpps === null) {
+      const demoData = getInitialDemoData();
+      saveDatasetForMode('demo', demoData.clients, demoData.opportunities, demoData.tasks, demoData.activities, demoData.settings);
+      return demoData;
+    }
+  }
+
+  const clients: Client[] = rawClients ? JSON.parse(rawClients) : [];
+  const opportunities: Opportunity[] = rawOpps ? JSON.parse(rawOpps) : [];
+  const tasks: FollowUpTask[] = rawTasks ? JSON.parse(rawTasks) : [];
+  const activities: ActivityLog[] = rawActivities ? JSON.parse(rawActivities) : [];
+  const fallbackSettings = isDemoMode ? DEFAULT_DEMO_SETTINGS : DEFAULT_OWN_SETTINGS;
+  const settings: UserSettings = rawSettings ? JSON.parse(rawSettings) : fallbackSettings;
+
+  return {
+    clients: Array.isArray(clients) ? clients : [],
+    opportunities: Array.isArray(opportunities) ? opportunities : [],
+    tasks: Array.isArray(tasks) ? tasks : [],
+    activities: Array.isArray(activities) ? activities : [],
+    settings: {
+      ...fallbackSettings,
+      ...settings,
+      appMode: mode,
+    },
+  };
+}
+
+/**
+ * Salva os dados de um ambiente específico
+ */
+export function saveDatasetForMode(
+  mode: AppMode,
+  clients: Client[],
+  opportunities: Opportunity[],
+  tasks: FollowUpTask[],
+  activities: ActivityLog[],
+  settings: UserSettings
+): void {
+  try {
+    const isDemoMode = mode === 'demo';
+    const clientsKey = isDemoMode ? STORAGE_KEYS.DEMO_CLIENTS : STORAGE_KEYS.OWN_CLIENTS;
+    const oppsKey = isDemoMode ? STORAGE_KEYS.DEMO_OPPORTUNITIES : STORAGE_KEYS.OWN_OPPORTUNITIES;
+    const tasksKey = isDemoMode ? STORAGE_KEYS.DEMO_TASKS : STORAGE_KEYS.OWN_TASKS;
+    const actsKey = isDemoMode ? STORAGE_KEYS.DEMO_ACTIVITIES : STORAGE_KEYS.OWN_ACTIVITIES;
+    const settingsKey = isDemoMode ? STORAGE_KEYS.DEMO_SETTINGS : STORAGE_KEYS.OWN_SETTINGS;
+
+    localStorage.setItem(STORAGE_KEYS.VERSION, '2.0');
+    localStorage.setItem(clientsKey, JSON.stringify(clients));
+    localStorage.setItem(oppsKey, JSON.stringify(opportunities));
+    localStorage.setItem(tasksKey, JSON.stringify(tasks));
+    localStorage.setItem(actsKey, JSON.stringify(activities));
+    localStorage.setItem(settingsKey, JSON.stringify(settings));
+    localStorage.setItem(STORAGE_KEYS.APP_MODE, mode);
+  } catch (err) {
+    console.error('Erro ao salvar no localStorage:', err);
+  }
+}
+
+/**
+ * Carregamento inicial com suporte a migração transparente e verificação de onboarding
+ */
 export function loadStoredData(): {
   clients: Client[];
   opportunities: Opportunity[];
@@ -344,136 +457,166 @@ export function loadStoredData(): {
   activities: ActivityLog[];
   settings: UserSettings;
   isDemo: boolean;
+  appMode: AppMode;
+  onboardingCompleted: boolean;
 } {
   try {
-    // 1. Tenta carregar a versão 2
-    const rawClients = localStorage.getItem(STORAGE_KEYS.CLIENTS);
-    const rawOpps = localStorage.getItem(STORAGE_KEYS.OPPORTUNITIES);
-    const rawTasks = localStorage.getItem(STORAGE_KEYS.TASKS);
-    const rawActivities = localStorage.getItem(STORAGE_KEYS.ACTIVITIES);
-    const rawSettings = localStorage.getItem(STORAGE_KEYS.SETTINGS);
-    const rawIsDemo = localStorage.getItem(STORAGE_KEYS.IS_DEMO);
+    const rawOnboarding = localStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
+    const rawAppMode = localStorage.getItem(STORAGE_KEYS.APP_MODE) as AppMode | null;
+    const legacyIsDemo = localStorage.getItem(STORAGE_KEYS.LEGACY_IS_DEMO);
+    const rawOwnSettings = localStorage.getItem(STORAGE_KEYS.OWN_SETTINGS);
 
-    // Se já existem dados v2
-    if (rawClients !== null || rawOpps !== null) {
-      const clients: Client[] = rawClients ? JSON.parse(rawClients) : [];
-      const opportunities: Opportunity[] = rawOpps ? JSON.parse(rawOpps) : [];
-      const tasks: FollowUpTask[] = rawTasks ? JSON.parse(rawTasks) : [];
-      const activities: ActivityLog[] = rawActivities ? JSON.parse(rawActivities) : [];
-      const settings: UserSettings = rawSettings ? JSON.parse(rawSettings) : DEFAULT_USER_SETTINGS;
-      const isDemo = rawIsDemo === 'true';
+    // 1. Determina se o onboarding já foi concluído
+    let onboardingCompleted = rawOnboarding === 'true';
 
-      return {
-        clients: Array.isArray(clients) ? clients : [],
-        opportunities: Array.isArray(opportunities) ? opportunities : [],
-        tasks: Array.isArray(tasks) ? tasks : [],
-        activities: Array.isArray(activities) ? activities : [],
-        settings: settings || DEFAULT_USER_SETTINGS,
-        isDemo,
-      };
+    // Migração de usuários anteriores: se já haviam configurado uma empresa real
+    if (rawOnboarding === null && rawOwnSettings) {
+      try {
+        const parsed = JSON.parse(rawOwnSettings);
+        if (parsed?.businessName && legacyIsDemo === 'false') {
+          onboardingCompleted = true;
+          localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+        }
+      } catch {
+        // ignora
+      }
     }
 
-    // 2. Se não encontrou v2, verifica se há dados da v1 para migrar sem perda!
-    const rawClientsV1 = localStorage.getItem(STORAGE_KEYS.CLIENTS_V1);
-    const rawOppsV1 = localStorage.getItem(STORAGE_KEYS.OPPORTUNITIES_V1);
-    const rawSettingsV1 = localStorage.getItem(STORAGE_KEYS.SETTINGS_V1);
-    const rawIsDemoV1 = localStorage.getItem(STORAGE_KEYS.IS_DEMO_V1);
-
-    if (rawClientsV1 || rawOppsV1) {
-      const clients: Client[] = rawClientsV1 ? JSON.parse(rawClientsV1) : [];
-      const opportunities: Opportunity[] = rawOppsV1 ? JSON.parse(rawOppsV1) : [];
-      const settings: UserSettings = rawSettingsV1 ? JSON.parse(rawSettingsV1) : DEFAULT_USER_SETTINGS;
-      const isDemo = rawIsDemoV1 === 'true';
-
-      // Cria tarefas a partir dos follow-ups das oportunidades migradas
-      const tasks: FollowUpTask[] = opportunities
-        .filter((o) => o.nextFollowUpDate)
-        .map((o) => ({
-          id: `tsk-migrated-${o.id}`,
-          clientId: o.clientId,
-          opportunityId: o.id,
-          title: `Retorno sobre ${o.title}`,
-          dueDate: o.nextFollowUpDate!,
-          status: o.completedFollowUp ? 'concluida' : 'pendente',
-          createdAt: o.createdAt,
-          updatedAt: o.updatedAt,
-        }));
-
-      const activities: ActivityLog[] = [
-        {
-          id: `act-migrated-${Date.now()}`,
-          type: 'client_updated',
-          title: 'Sistema Atualizado para ViraVenda 2.0',
-          description: 'Seus dados foram migrados com sucesso para a versão 2.0.',
-          timestamp: new Date().toISOString(),
-        },
-      ];
-
-      saveStoredData(clients, opportunities, tasks, activities, settings, isDemo);
-
-      return {
-        clients,
-        opportunities,
-        tasks,
-        activities,
-        settings,
-        isDemo,
-      };
+    // 2. Determina o modo ativo ('own' ou 'demo')
+    let activeMode: AppMode = 'own';
+    if (rawAppMode === 'demo' || (rawAppMode === null && legacyIsDemo === 'true' && !onboardingCompleted)) {
+      activeMode = 'demo';
+    } else if (rawAppMode === 'own') {
+      activeMode = 'own';
     }
 
-    // 3. Se for o primeiro acesso absoluto, inicializa com dados de demonstração
-    const demo = getInitialDemoData();
-    saveStoredData(demo.clients, demo.opportunities, demo.tasks, demo.activities, demo.settings, true);
+    // 3. Carrega o dataset correspondente ao modo ativo
+    const data = loadDatasetForMode(activeMode);
+
     return {
-      ...demo,
-      isDemo: true,
+      ...data,
+      isDemo: activeMode === 'demo',
+      appMode: activeMode,
+      onboardingCompleted,
     };
   } catch (err) {
-    console.error('Erro ao ler do localStorage. Retornando dados seguros:', err);
-    const demo = getInitialDemoData();
+    console.error('Erro ao ler do localStorage. Inicializando estado seguro:', err);
     return {
-      ...demo,
-      isDemo: true,
+      clients: [],
+      opportunities: [],
+      tasks: [],
+      activities: [],
+      settings: DEFAULT_OWN_SETTINGS,
+      isDemo: false,
+      appMode: 'own',
+      onboardingCompleted: false,
     };
   }
 }
 
+/**
+ * Salva os dados do modo ativo atual
+ */
 export function saveStoredData(
   clients: Client[],
   opportunities: Opportunity[],
   tasks: FollowUpTask[],
   activities: ActivityLog[],
   settings: UserSettings,
-  isDemo?: boolean
+  isDemoOrMode?: boolean | AppMode
 ): void {
+  const mode: AppMode =
+    typeof isDemoOrMode === 'string'
+      ? isDemoOrMode
+      : isDemoOrMode === true
+      ? 'demo'
+      : settings.appMode || 'own';
+
+  saveDatasetForMode(mode, clients, opportunities, tasks, activities, {
+    ...settings,
+    appMode: mode,
+  });
+}
+
+/**
+ * Registra a conclusão do onboarding com os dados da empresa cadastrada
+ */
+export function completeOnboarding(companySettings: UserSettings): {
+  settings: UserSettings;
+} {
+  const updatedSettings: UserSettings = {
+    ...DEFAULT_OWN_SETTINGS,
+    ...companySettings,
+    onboardingCompleted: true,
+    appMode: 'own',
+  };
+
+  localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+  localStorage.setItem(STORAGE_KEYS.APP_MODE, 'own');
+  localStorage.setItem(STORAGE_KEYS.LEGACY_IS_DEMO, 'false');
+  localStorage.setItem(STORAGE_KEYS.OWN_SETTINGS, JSON.stringify(updatedSettings));
+
+  // Garante que a base própria comece limpa se não houver clientes
+  const rawOwnClients = localStorage.getItem(STORAGE_KEYS.OWN_CLIENTS);
+  if (rawOwnClients === null) {
+    localStorage.setItem(STORAGE_KEYS.OWN_CLIENTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.OWN_OPPORTUNITIES, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.OWN_TASKS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.OWN_ACTIVITIES, JSON.stringify([
+      {
+        id: `act-welcome-${Date.now()}`,
+        type: 'client_updated',
+        title: 'Ambiente Comercial Configurado',
+        description: `Ambiente de vendas inicializado para ${companySettings.businessName}.`,
+        timestamp: new Date().toISOString(),
+      },
+    ]));
+  }
+
+  return { settings: updatedSettings };
+}
+
+/**
+ * Define o modo da aplicação ('own' ou 'demo')
+ */
+export function setStoredAppMode(mode: AppMode): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.VERSION, '2.0');
-    localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify(clients));
-    localStorage.setItem(STORAGE_KEYS.OPPORTUNITIES, JSON.stringify(opportunities));
-    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify(tasks));
-    localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify(activities));
-    localStorage.setItem(STORAGE_KEYS.SETTINGS, JSON.stringify(settings));
-    if (typeof isDemo === 'boolean') {
-      localStorage.setItem(STORAGE_KEYS.IS_DEMO, isDemo ? 'true' : 'false');
-    }
+    localStorage.setItem(STORAGE_KEYS.APP_MODE, mode);
+    localStorage.setItem(STORAGE_KEYS.LEGACY_IS_DEMO, mode === 'demo' ? 'true' : 'false');
   } catch (err) {
-    console.error('Erro ao salvar no localStorage:', err);
+    console.error('Erro ao atualizar modo do app:', err);
   }
 }
 
-export function clearAllData(): void {
+/**
+ * Define o estado de onboarding
+ */
+export function setStoredOnboardingCompleted(completed: boolean): void {
   try {
-    localStorage.setItem(STORAGE_KEYS.CLIENTS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.OPPORTUNITIES, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.TASKS, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.ACTIVITIES, JSON.stringify([]));
-    localStorage.setItem(STORAGE_KEYS.IS_DEMO, 'false');
+    localStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, completed ? 'true' : 'false');
   } catch (err) {
-    console.error('Erro ao limpar dados:', err);
+    console.error('Erro ao atualizar onboarding:', err);
   }
 }
 
-export function resetToDemoData(): {
+/**
+ * Limpa exclusivamente a base da empresa própria (mantém modo próprio limpo)
+ */
+export function clearOwnData(): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.OWN_CLIENTS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.OWN_OPPORTUNITIES, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.OWN_TASKS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.OWN_ACTIVITIES, JSON.stringify([]));
+  } catch (err) {
+    console.error('Erro ao limpar dados próprios:', err);
+  }
+}
+
+/**
+ * Reseta exclusivamente os dados do modo de demonstração (não toca na empresa própria)
+ */
+export function resetDemoData(): {
   clients: Client[];
   opportunities: Opportunity[];
   tasks: FollowUpTask[];
@@ -481,7 +624,7 @@ export function resetToDemoData(): {
   settings: UserSettings;
 } {
   const demo = getInitialDemoData();
-  saveStoredData(demo.clients, demo.opportunities, demo.tasks, demo.activities, demo.settings, true);
+  saveDatasetForMode('demo', demo.clients, demo.opportunities, demo.tasks, demo.activities, demo.settings);
   return demo;
 }
 
@@ -511,7 +654,8 @@ export function exportBackupJSON(
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `viravenda_backup_v2_${getTodayISODate()}.json`;
+  const safeName = (settings.businessName || 'empresa').toLowerCase().replace(/[^a-z0-9]/g, '_');
+  link.download = `viravenda_${safeName}_backup_${getTodayISODate()}.json`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
@@ -556,7 +700,7 @@ export function validateAndPreviewJSON(jsonText: string): {
     const opportunities: Opportunity[] = parsed.opportunities;
     const tasks: FollowUpTask[] = Array.isArray(parsed.tasks) ? parsed.tasks : [];
     const activities: ActivityLog[] = Array.isArray(parsed.activities) ? parsed.activities : [];
-    const settings: UserSettings = parsed.settings || DEFAULT_USER_SETTINGS;
+    const settings: UserSettings = parsed.settings || DEFAULT_OWN_SETTINGS;
 
     return {
       success: true,
@@ -594,7 +738,7 @@ function escapeCSV(field: string | number | undefined | null): string {
 }
 
 /**
- * Exportar Clientes para CSV com cabeçalho UTF-8 (BOM para compatibilidade com Excel)
+ * Exportar Clientes para CSV com cabeçalho UTF-8
  */
 export function exportClientsCSV(clients: Client[], opportunities: Opportunity[]): void {
   const headers = [

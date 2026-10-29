@@ -1,5 +1,5 @@
 import React from 'react';
-import { Client, Opportunity, FollowUpTask, ActivityLog, ActiveTab } from '../types';
+import { Client, Opportunity, FollowUpTask, ActivityLog, ActiveTab, UserSettings, AppMode } from '../types';
 import { formatBRL, getFollowUpStatus, formatRelativeTime } from '../utils/formatters';
 import {
   Users,
@@ -17,6 +17,9 @@ import {
   XCircle,
   Activity,
   CheckCircle2,
+  Building2,
+  Sparkles,
+  UserPlus,
 } from 'lucide-react';
 
 interface DashboardViewProps {
@@ -30,6 +33,9 @@ interface DashboardViewProps {
   onNewTask: () => void;
   onOpenMessageWithOpp: (opp: Opportunity) => void;
   onQuickCompleteFollowUp: (oppId: string) => void;
+  isDemo?: boolean;
+  settings?: UserSettings;
+  onSwitchMode?: (mode: AppMode) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
@@ -43,6 +49,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNewTask,
   onOpenMessageWithOpp,
   onQuickCompleteFollowUp,
+  isDemo = false,
+  settings,
+  onSwitchMode,
 }) => {
   // Cálculos comerciais baseados exclusivamente nos dados reais
   const totalClients = clients.length;
@@ -140,6 +149,105 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6">
+      {/* Guia de Primeiros Passos quando a empresa própria estiver sem dados */}
+      {!isDemo && totalClients === 0 && openCount === 0 && wonCount === 0 && (
+        <div className="bg-gradient-to-r from-emerald-900 via-emerald-800 to-slate-900 rounded-3xl p-6 sm:p-8 text-white shadow-xl shadow-emerald-900/10 border border-emerald-700/40">
+          <div className="max-w-2xl space-y-2">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-700/50 text-emerald-200 text-xs font-semibold">
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Ambiente Próprio Inicializado</span>
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+              Bem-vindo ao ViraVenda{settings?.userName ? `, ${settings.userName}` : ''}!
+            </h2>
+            <p className="text-sm text-emerald-100/90 leading-relaxed">
+              Sua base comercial está pronta para receber seus primeiros contatos e orçamentos.
+              Siga os passos abaixo para organizar seu dia a dia e não esquecer nenhuma venda:
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-6">
+            {/* Passo 1 */}
+            <div className="bg-white/10 backdrop-blur-xs p-4 rounded-2xl border border-white/10 flex flex-col justify-between gap-4">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">
+                  Passo 1
+                </span>
+                <h3 className="text-base font-bold text-white">Cadastre seu 1º Cliente</h3>
+                <p className="text-xs text-emerald-100/80 leading-relaxed">
+                  Adicione o nome, WhatsApp e dados de contato para ter o histórico comercial organizado.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onNewClient}
+                className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white text-emerald-900 hover:bg-emerald-50 text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>+ Cadastrar Cliente</span>
+              </button>
+            </div>
+
+            {/* Passo 2 */}
+            <div className="bg-white/10 backdrop-blur-xs p-4 rounded-2xl border border-white/10 flex flex-col justify-between gap-4">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">
+                  Passo 2
+                </span>
+                <h3 className="text-base font-bold text-white">Crie um Orçamento</h3>
+                <p className="text-xs text-emerald-100/80 leading-relaxed">
+                  Registre o valor em reais, vincule ao cliente e defina em qual etapa a proposta está.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onNewOpportunity}
+                className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>+ Criar Oportunidade</span>
+              </button>
+            </div>
+
+            {/* Passo 3 */}
+            <div className="bg-white/10 backdrop-blur-xs p-4 rounded-2xl border border-white/10 flex flex-col justify-between gap-4">
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-300">
+                  Passo 3
+                </span>
+                <h3 className="text-base font-bold text-white">Agende o Retorno</h3>
+                <p className="text-xs text-emerald-100/80 leading-relaxed">
+                  Defina a data para cobrar a resposta do cliente ou enviar uma mensagem pelo WhatsApp.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onNewTask}
+                className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition cursor-pointer shadow-xs"
+              >
+                <CalendarClock className="w-3.5 h-3.5" />
+                <span>+ Agendar Retorno</span>
+              </button>
+            </div>
+          </div>
+
+          {onSwitchMode && (
+            <div className="mt-5 pt-4 border-t border-white/10 flex items-center justify-between flex-wrap gap-2 text-xs text-emerald-200">
+              <span>Quer ver como o sistema fica após o preenchimento?</span>
+              <button
+                type="button"
+                onClick={() => onSwitchMode('demo')}
+                className="inline-flex items-center gap-1.5 text-white font-bold hover:underline cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Ver Modo Demonstração com dados de exemplo</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 5 Cards de Métricas Principais */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Total de Clientes */}

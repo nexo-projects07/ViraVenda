@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActiveTab } from '../types';
+import { ActiveTab, UserSettings, AppMode } from '../types';
 import {
   LayoutDashboard,
   Users,
@@ -11,7 +11,9 @@ import {
   BarChart3,
   X,
   HardDrive,
-  Info
+  Building2,
+  Sparkles,
+  ArrowRightLeft,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -20,8 +22,11 @@ interface SidebarProps {
   overdueCount: number;
   todayCount: number;
   isDemo: boolean;
+  settings: UserSettings;
   mobileMenuOpen: boolean;
   setMobileMenuOpen: (open: boolean) => void;
+  onSwitchMode?: (targetMode: AppMode) => void;
+  onOpenOnboarding?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -30,8 +35,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   overdueCount,
   todayCount,
   isDemo,
+  settings,
   mobileMenuOpen,
   setMobileMenuOpen,
+  onSwitchMode,
+  onOpenOnboarding,
 }) => {
   const navItems: {
     id: ActiveTab;
@@ -84,6 +92,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setMobileMenuOpen(false);
   };
 
+  const companyDisplayName = settings.businessName || (isDemo ? 'ViraVenda Soluções' : 'Minha Empresa');
+
   return (
     <>
       {/* Mobile Drawer Overlay */}
@@ -120,6 +130,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               onClick={() => setMobileMenuOpen(false)}
               className="md:hidden text-slate-400 hover:text-slate-600 p-1 rounded-lg"
+              aria-label="Fechar menu"
             >
               <X className="w-5 h-5" />
             </button>
@@ -164,17 +175,59 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </nav>
         </div>
 
-        {/* Bottom: Storage & Demo info */}
+        {/* Bottom: Environment Status, Switcher & Storage info */}
         <div className="p-4 border-t border-slate-100 bg-slate-50/70 space-y-3">
-          {isDemo && (
-            <div className="p-2.5 bg-amber-50 border border-amber-200/80 rounded-xl text-xs text-amber-900 flex items-start gap-2">
-              <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold block">Modo Demonstração</span>
-                <span className="text-amber-700 text-[11px]">
-                  Exemplos para testar. Você pode limpar nas configurações.
+          {/* Environment card */}
+          {isDemo ? (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2">
+              <div className="flex items-center gap-1.5 text-amber-900 text-xs font-bold">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span>Modo Demonstração</span>
+              </div>
+              <p className="text-[11px] text-amber-800 leading-tight">
+                Dados fictícios de exemplo.
+              </p>
+              {settings.onboardingCompleted ? (
+                <button
+                  type="button"
+                  onClick={() => onSwitchMode && onSwitchMode('own')}
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                  <ArrowRightLeft className="w-3 h-3" />
+                  <span>Ir para Meu Ambiente</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onOpenOnboarding}
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition cursor-pointer"
+                >
+                  <Building2 className="w-3 h-3" />
+                  <span>Configurar Minha Empresa</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="p-3 bg-emerald-50/60 border border-emerald-200/80 rounded-xl space-y-2">
+              <div className="flex items-center gap-1.5 text-emerald-950 text-xs font-bold truncate">
+                <Building2 className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                <span className="truncate" title={companyDisplayName}>
+                  {companyDisplayName}
                 </span>
               </div>
+              <p className="text-[11px] text-emerald-800 leading-tight">
+                Ambiente Próprio e Seguro.
+              </p>
+              {onSwitchMode && (
+                <button
+                  type="button"
+                  onClick={() => onSwitchMode('demo')}
+                  className="w-full inline-flex items-center justify-center gap-1.5 py-1.5 px-2 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                >
+                  <Sparkles className="w-3 h-3 text-amber-500" />
+                  <span>Ver Demonstração</span>
+                </button>
+              )}
             </div>
           )}
 
